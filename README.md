@@ -4,19 +4,24 @@ A Chrome extension that pauses you before clicks you might regret, scored by Jev
 
 ## How it fits together
 
-```
- page click (capture phase)
-        │  content.js: is this a "commit" button? grab page state
-        ▼
- background.js ──POST /check──▶ main.py ──typesafe_sdk──▶ OpenRouter ──▶ Jev
-        │   ◀── { regret, kind, reasons } ──┘
-        ▼
- regret < threshold → release the click
- regret ≥ threshold → pause card: "Hold 10 minutes" or "Continue anyway"
-        │
- Hold → chrome.alarms → notification 10 min later → reopens the tab
- Click went through → follow-up later: "Do you regret it?" Yes / No (at most 5 a day)
- Every check → checks.jsonl · every choice → POST /feedback → outcomes.jsonl
+```mermaid
+flowchart TD
+    A["Page click (capture phase)"] --> B["content.js<br/>Is this a commit button?<br/>Grab page state"]
+    B --> C["background.js"]
+    C -- "POST /check" --> D["main.py (server)"]
+    D -- "typesafe_sdk" --> E["OpenRouter → Jev"]
+    E -- "regret, kind, reasons" --> D
+    D -- "score" --> C
+    D -.-> L1[("checks.jsonl<br/>every check")]
+    C --> F{"regret vs threshold"}
+    F -- "below" --> G["Release the click"]
+    F -- "at or above" --> H["Pause card"]
+    H -- "Hold 10 minutes" --> I["chrome.alarms"]
+    I --> J["Notification 10 min later<br/>reopens the tab"]
+    H -- "Continue anyway" --> G
+    G --> K["Follow-up later:<br/>Do you regret it? Yes / No<br/>(at most 5 a day)"]
+    H -. "POST /feedback" .-> L2[("outcomes.jsonl<br/>every choice")]
+    K -. "POST /feedback" .-> L2
 ```
 
 The API key lives only on the server. Never put it in the extension; anyone can unzip a .crx.
