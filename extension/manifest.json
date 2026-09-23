@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Regret Check",
+  "version": "0.1.0",
+  "description": "Pauses you before clicks you might regret.",
+  "icons": { "128": "icon.png" },
+  "action": { "default_popup": "popup.html", "default_icon": { "128": "icon.png" } },
+  "permissions": ["storage", "alarms", "notifications", "activeTab"],
+  "host_permissions": ["http://localhost:8001/*"],
+  "background": { "service_worker": "background.js" },
+  "content_scripts": [
+    { "matches": ["<all_urls>"], "js": ["content.js"], "run_at": "document_idle" }
+  ]
+}

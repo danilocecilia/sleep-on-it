@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Regret Check</title>
+  <style>
+    /* Same palette as the pause card in content.js. */
+    :root {
+      --ink: #1F2A44; --paper: #FFFFFF; --muted: #5B6478; --track: #E6E9F0; --soft: #F4F6FA;
+      --line: #E6E9F0; --accent: #E0A33B; --high: #C8553D;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink: #EDF0F7; --paper: #1B2233; --muted: #A3ABBD; --track: #2C3550; --soft: #222A3D; --line: #2C3550; }
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      margin: 0; width: 320px; background: var(--paper); color: var(--ink);
+      font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    :focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+    /* Header */
+    header { display: flex; align-items: center; gap: 10px; padding: 14px 16px 12px; }
+    header img { width: 28px; height: 28px; border-radius: 7px; flex: none; }
+    header .name { margin: 0; font-size: 15px; font-weight: 650; }
+    header .status { margin: 0; font-size: 12px; color: var(--muted); }
+    header .grow { flex: 1; min-width: 0; }
+
+    /* Waiting questions */
+    .waiting {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      width: calc(100% - 32px); margin: 0 16px 12px; padding: 10px 12px; border-radius: 10px;
+      font: inherit; text-align: left; cursor: pointer;
+      background: var(--soft); color: var(--ink); border: 1px solid var(--high);
+    }
+    .waiting strong { display: block; font-weight: 600; }
+    .waiting small { display: block; font-size: 12px; color: var(--muted); }
+    .waiting .go { flex: none; font-weight: 600; color: var(--high); }
+
+    /* Groups */
+    main.off .group { opacity: .5; }
+    .group { padding: 12px 16px; border-top: 1px solid var(--line); }
+    .group h2 { margin: 0 0 8px; font-size: 12px; font-weight: 600; color: var(--muted); }
+    .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .site { font-weight: 600; overflow-wrap: anywhere; }
+    .hint { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+
+    /* Switch */
+    .switch { position: relative; flex: none; width: 36px; height: 20px; }
+    .switch input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+    .switch span {
+      position: absolute; inset: 0; border-radius: 10px; background: var(--track);
+      transition: background .15s; pointer-events: none;
+    }
+    .switch span::after {
+      content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px;
+      border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s;
+    }
+    .switch input:checked + span { background: var(--ink); }
+    .switch input:checked + span::after { transform: translateX(16px); }
+    .switch input:focus-visible + span { outline: 3px solid var(--accent); outline-offset: 2px; }
+    .switch input:disabled { cursor: default; }
+
+    /* Threshold */
+    .value { font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; }
+    input[type="range"] { width: 100%; margin: 6px 0 0; accent-color: var(--ink); }
+    .scale { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); }
+
+    /* Follow-up */
+    select {
+      width: 100%; font: inherit; color: var(--ink); background: var(--paper); cursor: pointer;
+      border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px;
+    }
+
+    /* Turned-off sites */
+    ul { list-style: none; margin: 0; padding: 0; }
+    li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 0; }
+    li span { overflow-wrap: anywhere; }
+    li button {
+      flex: none; font: inherit; font-size: 12px; cursor: pointer; padding: 2px 8px;
+      border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--ink);
+    }
+
+    /* Footer */
+    footer { padding: 10px 16px 14px; border-top: 1px solid var(--line); }
+    footer a { color: var(--ink); font-size: 13px; font-weight: 600; text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="icon.png" alt="">
+    <div class="grow">
+      <p class="name">Regret Check</p>
+      <p class="status" id="status"></p>
+    </div>
+    <label class="switch"><input type="checkbox" id="enabled" aria-label="Regret Check on everywhere"><span></span></label>
+  </header>
+
+  <button class="waiting" id="waiting" hidden>
+    <span id="waiting-text"></span>
+    <span class="go" aria-hidden="true">Answer →</span>
+  </button>
+
+  <main id="main">
+    <section class="group" aria-labelledby="h-site">
+      <h2 id="h-site">This site</h2>
+      <div class="row">
+        <span>Check clicks on <span class="site" id="site">this page</span></span>
+        <label class="switch"><input type="checkbox" id="site-on" aria-label="Check clicks on this site"><span></span></label>
+      </div>
+      <p class="hint" id="site-hint" hidden></p>
+    </section>
+
+    <section class="group" aria-labelledby="h-threshold">
+      <div class="row">
+        <h2 id="h-threshold" style="margin:0">Pause when regret risk is at least</h2>
+        <span class="value" id="threshold-value"></span>
+      </div>
+      <input type="range" id="threshold" min="10" max="95" step="5" aria-labelledby="h-threshold">
+      <div class="scale"><span>Pause more often</span><span>Pause less often</span></div>
+    </section>
+
+    <section class="group" aria-labelledby="h-follow">
+      <h2 id="h-follow">Ask "Do you regret it?"</h2>
+      <select id="follow-up" aria-labelledby="h-follow">
+        <option value="2">2 minutes later (testing)</option>
+        <option value="1440">1 day later</option>
+        <option value="10080">7 days later</option>
+        <option value="0">Never</option>
+      </select>
+      <p class="hint">For clicks that went through, at most 5 a day. Answers feed the calibration chart.</p>
+    </section>
+
+    <section class="group" id="paused-group" aria-labelledby="h-paused" hidden>
+      <h2 id="h-paused">Turned off on</h2>
+      <ul id="paused"></ul>
+    </section>
+  </main>
+
+  <footer>
+    <a href="http://localhost:8001/calibration" target="_blank" rel="noopener">Calibration chart ↗</a>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

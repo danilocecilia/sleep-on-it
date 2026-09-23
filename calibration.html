@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Regret Check calibration</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+      --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11, 11, 11, .10);
+      --series: #2a78d6; --focus: #eda100;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root:where(:not([data-theme="light"])) {
+        color-scheme: dark;
+        --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+        --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, .10);
+        --series: #3987e5; --focus: #c98500;
+      }
+    }
+    :root[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink-2: #c3c2b7; --muted: #898781;
+      --grid: #2c2c2a; --axis: #383835; --border: rgba(255, 255, 255, .10);
+      --series: #3987e5; --focus: #c98500;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 40px 16px 56px; background: var(--page); color: var(--ink);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 640px; margin: 0 auto; }
+    h1 { margin: 0 0 4px; font-size: 24px; font-weight: 650; }
+    h2 { margin: 0 0 12px; font-size: 16px; font-weight: 650; }
+    .lede { margin: 0 0 24px; color: var(--ink-2); }
+    .card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      padding: 20px; margin-bottom: 16px;
+    }
+
+    .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .tile .label { margin: 0; font-size: 13px; color: var(--ink-2); }
+    .tile .value { margin: 2px 0 0; font-size: 26px; font-weight: 600; line-height: 1.2; }
+    .tile .sub { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+
+    .notice {
+      margin: 0 0 16px; padding: 10px 14px; border-radius: 10px; font-size: 14px;
+      background: var(--surface); border: 1px solid var(--border); color: var(--ink-2);
+    }
+
+    .chart { position: relative; }
+    svg { display: block; width: 100%; height: auto; overflow: visible; }
+    svg text { font: 12px system-ui, -apple-system, "Segoe UI", sans-serif; fill: var(--muted); font-variant-numeric: tabular-nums; }
+    svg .axis-title { fill: var(--ink-2); font-size: 13px; }
+    .hit { fill: transparent; cursor: default; outline: none; }
+    .hit:focus-visible + .dot, .hit:hover + .dot { r: 7; }
+    .hit:focus-visible { stroke: var(--focus); stroke-width: 3; }
+    .caption { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); }
+
+    .tip {
+      position: absolute; pointer-events: none; z-index: 1; min-width: 170px;
+      background: var(--surface); color: var(--ink); border: 1px solid var(--border); border-radius: 8px;
+      padding: 8px 10px; font-size: 13px; line-height: 1.4; box-shadow: 0 6px 18px rgba(0, 0, 0, .14);
+      transform: translate(-50%, calc(-100% - 14px));
+    }
+    .tip strong { display: block; margin-bottom: 2px; }
+    .tip .muted { color: var(--ink-2); }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { white-space: nowrap; padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+    th:first-child, td:first-child { text-align: left; }
+    th { font-weight: 600; color: var(--ink-2); font-size: 13px; }
+    tr:last-child td { border-bottom: none; }
+    td.empty { color: var(--muted); }
+    .table-wrap { overflow-x: auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Is Jev's regret risk right?</h1>
+    <p class="lede">
+      If Jev says 70%, about 7 in 10 of those clicks should be regretted a week later.
+      Each dot groups your answered follow-ups by the risk Jev predicted for them.
+    </p>
+
+    <div class="tiles" id="tiles"></div>
+    <p class="notice" id="notice" hidden></p>
+
+    <section class="card">
+      <h2>Predicted vs. actually regretted</h2>
+      <div class="chart" id="chart"></div>
+      <p class="caption">
+        Dots on the grey diagonal mean Jev is right: predicted and actual regret match.
+        Above it, Jev underestimates regret; below it, Jev overestimates.
+        Vertical lines show each dot's likely range (95%); fewer answers means longer lines.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>The numbers</h2>
+      <div class="table-wrap"><table id="table"></table></div>
+    </section>
+  </main>
+
+  <script id="data" type="application/json">__DATA__</script>
+  <script>
+    const data = JSON.parse(document.getElementById("data").textContent);
+    const pct = (x) => `${Math.round(x * 100)}%`;
+    const el = (tag, attrs = {}, text) => {
+      const svgTags = ["svg", "line", "circle", "text", "g", "rect"];
+      const node = svgTags.includes(tag)
+        ? document.createElementNS("http://www.w3.org/2000/svg", tag)
+        : document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) node.setAttribute(k, v);
+      if (text != null) node.textContent = text;
+      return node;
+    };
+
+    // Stat tiles
+    const rate = data.answered ? pct(data.regretted / data.answered) : "–";
+    const tiles = [
+      ["Clicks scored", data.checks.toLocaleString(), "every check Jev answered"],
+      ["Follow-ups answered", data.answered.toLocaleString(), "the only clicks the chart can use"],
+      ["Actually regretted", rate, data.answered ? `${data.regretted} of ${data.answered}` : "no answers yet"],
+      ["Brier score", data.brier == null ? "–" : data.brier.toFixed(2), "0 is perfect · 0.25 is a coin flip"],
+    ];
+    document.getElementById("tiles").replaceChildren(...tiles.map(([label, value, sub]) => {
+      const t = el("div", { class: "tile" });
+      t.append(el("p", { class: "label" }, label), el("p", { class: "value" }, value), el("p", { class: "sub" }, sub));
+      return t;
+    }));
+
+    if (data.answered < 30) {
+      const n = document.getElementById("notice");
+      n.hidden = false;
+      n.textContent = data.answered === 0
+        ? "No follow-ups answered yet. Dots appear as you answer \"Do you regret it?\" questions."
+        : `Only ${data.answered} answer${data.answered === 1 ? "" : "s"} so far, so the dots can move a lot. The chart becomes meaningful after about 30.`;
+    }
+
+    // Chart: both axes 0-100%. Drawn at the container's real width so text stays 12px
+    // on phones instead of scaling with the drawing; redrawn when the width changes.
+    const chart = document.getElementById("chart");
+    function draw() {
+    const W = Math.max(280, chart.clientWidth), H = Math.round(Math.min(W * 0.9, 540));
+    const m = { t: 12, r: 16, b: 52, l: 52 };
+    const pw = W - m.l - m.r, ph = H - m.t - m.b;
+    const x = (v) => m.l + v * pw;
+    const y = (v) => m.t + (1 - v) * ph;
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img",
+      "aria-label": "Calibration chart: predicted regret against the share actually regretted. Numbers are in the table below." });
+
+    for (let i = 0; i <= 5; i++) {
+      const v = i / 5;
+      svg.append(
+        el("line", { x1: m.l, x2: m.l + pw, y1: y(v), y2: y(v), stroke: i === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }),
+        el("line", { x1: x(v), x2: x(v), y1: m.t, y2: m.t + ph, stroke: i === 0 ? "var(--axis)" : "var(--grid)", "stroke-width": 1 }),
+        el("text", { x: m.l - 8, y: y(v) + 4, "text-anchor": "end" }, pct(v)),
+        el("text", { x: x(v), y: m.t + ph + 18, "text-anchor": "middle" }, pct(v)),
+      );
+    }
+    svg.append(
+      el("text", { class: "axis-title", x: m.l + pw / 2, y: H - 8, "text-anchor": "middle" }, "Jev's predicted regret"),
+      el("text", { class: "axis-title", x: 0, y: 0, "text-anchor": "middle",
+        transform: `translate(14 ${m.t + ph / 2}) rotate(-90)` }, "Actually regretted"),
+    );
+
+    // Perfect-calibration reference: a quiet diagonal, named in the caption (a label on it
+    // would sit where the high-risk dots land).
+    svg.append(el("line", { x1: x(0), y1: y(0), x2: x(1), y2: y(1), stroke: "var(--axis)", "stroke-width": 1.5 }));
+
+    const tip = el("div", { class: "tip", hidden: "" });
+    const showTip = (b, cx, cy) => {
+      const box = svg.getBoundingClientRect(), s = box.width / W;
+      tip.replaceChildren(
+        el("strong", {}, `Predicted ${pct(b.lo)}–${pct(b.hi)}`),
+        el("div", {}, `Actually regretted: ${pct(b.actual)} (${b.regretted} of ${b.n})`),
+        el("div", { class: "muted" }, `Average prediction: ${pct(b.predicted)}`),
+        el("div", { class: "muted" }, `Likely range: ${pct(b.ciLow)}–${pct(b.ciHigh)}`),
+      );
+      tip.style.left = `${cx * s}px`;
+      tip.style.top = `${cy * s}px`;
+      tip.hidden = false;
+    };
+    const hideTip = () => { tip.hidden = true; };
+
+    for (const b of data.bins.filter((b) => b.n > 0)) {
+      const cx = x(b.predicted), cy = y(b.actual);
+      const g = el("g");
+      g.append(
+        el("line", { x1: cx, x2: cx, y1: y(b.ciLow), y2: y(b.ciHigh), stroke: "var(--series)", "stroke-width": 2,
+          "stroke-opacity": 0.35, "stroke-linecap": "round" }),
+      );
+      const hit = el("circle", { class: "hit", cx, cy, r: 14, tabindex: 0,
+        "aria-label": `Predicted ${pct(b.lo)} to ${pct(b.hi)}: ${b.regretted} of ${b.n} regretted` });
+      const dot = el("circle", { class: "dot", cx, cy, r: 5, fill: "var(--series)", stroke: "var(--surface)", "stroke-width": 2,
+        "pointer-events": "none" });
+      hit.addEventListener("pointerenter", () => showTip(b, cx, cy));
+      hit.addEventListener("pointerleave", hideTip);
+      hit.addEventListener("focus", () => showTip(b, cx, cy));
+      hit.addEventListener("blur", hideTip);
+      g.append(hit, dot);
+      svg.append(g);
+    }
+    chart.replaceChildren(svg, tip);
+    }
+    let lastWidth = 0;
+    new ResizeObserver(() => {
+      if (chart.clientWidth !== lastWidth) { lastWidth = chart.clientWidth; draw(); }
+    }).observe(chart);
+
+    // Table view: every bin, including empty ones.
+    const table = document.getElementById("table");
+    const head = el("tr");
+    ["Predicted", "Answers", "Regretted", "Actual rate", "Avg. prediction"].forEach((h) => head.append(el("th", { scope: "col" }, h)));
+    table.append(el("thead"), el("tbody"));
+    table.tHead.append(head);
+    for (const b of data.bins) {
+      const tr = el("tr");
+      tr.append(el("td", {}, `${pct(b.lo)}–${pct(b.hi)}`), el("td", {}, String(b.n)));
+      if (b.n) {
+        tr.append(el("td", {}, String(b.regretted)), el("td", {}, pct(b.actual)), el("td", {}, pct(b.predicted)));
+      } else {
+        for (let i = 0; i < 3; i++) tr.append(el("td", { class: "empty" }, "–"));
+      }
+      table.tBodies[0].append(tr);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Do you regret it? · Regret Check</title>
+  <link rel="icon" href="icon.png">
+  <style>
+    /* Same palette as the pause card and popup. */
+    :root {
+      --ink: #1F2A44; --paper: #FFFFFF; --page: #F4F6FA; --muted: #5B6478; --line: #E6E9F0;
+      --accent: #E0A33B; --high: #C8553D; --low: #3E8E7E;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink: #EDF0F7; --paper: #1B2233; --page: #121826; --muted: #A3ABBD; --line: #2C3550; }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 48px 16px; background: var(--page); color: var(--ink);
+      font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main { max-width: 560px; margin: 0 auto; }
+    h1 { margin: 0 0 4px; font-size: 22px; font-weight: 650; }
+    .lede { margin: 0 0 24px; color: var(--muted); }
+    ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+    li {
+      background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 16px;
+      transition: opacity .2s;
+    }
+    li.done { opacity: .55; }
+    .what { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+    .meta { margin: 2px 0 12px; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      font: inherit; cursor: pointer; border-radius: 8px; padding: 8px 14px;
+      border: 1px solid var(--ink); background: transparent; color: var(--ink);
+    }
+    button.yes { background: var(--ink); color: var(--paper); }
+    button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+    button:disabled { cursor: default; opacity: .5; }
+    .status { margin: 0; font-size: 13px; color: var(--muted); }
+    .status.error { color: var(--high); }
+    .empty {
+      background: var(--paper); border: 1px solid var(--line); border-radius: 14px; padding: 24px;
+      text-align: center; color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Do you regret it?</h1>
+    <p class="lede">Your answers show how often Regret Check's predictions come true.</p>
+    <ul id="list"></ul>
+    <p class="empty" id="empty" hidden>Nothing to answer right now.</p>
+  </main>
+  <script src="followup.js"></script>
+</body>
+</html>
